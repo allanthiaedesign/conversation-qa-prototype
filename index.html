@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QA de Atendimento com IA — Protótipo</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#171b2e; --panel2:#1e2338; --line:#2a3050;
+    --text:#e8ebf5; --muted:#9aa3c7; --brand:#5b8cff; --brand2:#7c5cff;
+    --good:#2fbf87; --warn:#f0a93b; --bad:#f0556b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  a{color:inherit}
+  .app{display:grid;grid-template-columns:340px 1fr;min-height:100vh}
+  /* ---- sidebar / lista ---- */
+  .side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column}
+  .brand{padding:20px 22px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--line)}
+  .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--brand),var(--brand2));
+    display:grid;place-items:center;font-weight:800;color:#fff}
+  .brand h1{font-size:15px;margin:0;line-height:1.15}
+  .brand span{font-size:11.5px;color:var(--muted)}
+  .kpis{display:flex;gap:10px;padding:16px 18px}
+  .kpi{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:11px 12px}
+  .kpi b{display:block;font-size:21px}
+  .kpi small{color:var(--muted);font-size:11px}
+  .listhead{padding:6px 20px 10px;color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+  .list{overflow:auto;flex:1;padding:0 12px 16px}
+  .item{width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:12px;
+    padding:12px 13px;margin-bottom:6px;cursor:pointer;display:flex;gap:12px;align-items:center;color:var(--text)}
+  .item:hover{background:var(--panel2)}
+  .item.active{background:var(--panel2);border-color:var(--line)}
+  .ava{width:38px;height:38px;border-radius:50%;background:#2a3050;display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+  .item .who{flex:1;min-width:0}
+  .item .who b{font-size:13.5px;font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item .who small{color:var(--muted);font-size:11.5px}
+  .score{font-weight:800;font-size:14px;padding:3px 9px;border-radius:20px}
+  .s-good{background:rgba(47,191,135,.15);color:var(--good)}
+  .s-warn{background:rgba(240,169,59,.15);color:var(--warn)}
+  .s-bad{background:rgba(240,85,107,.15);color:var(--bad)}
+  /* ---- detalhe ---- */
+  .main{padding:26px 30px;overflow:auto}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+  .top h2{margin:0 0 3px;font-size:20px}
+  .top .meta{color:var(--muted);font-size:13px}
+  .gauge{display:flex;align-items:center;gap:14px}
+  .ring{--v:0;width:78px;height:78px;border-radius:50%;
+    background:conic-gradient(var(--rc) calc(var(--v)*1%), #2a3050 0);display:grid;place-items:center}
+  .ring i{width:60px;height:60px;border-radius:50%;background:var(--panel);display:grid;place-items:center;font-style:normal;font-weight:800;font-size:19px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:18px 20px}
+  .card h3{margin:0 0 12px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .card.span2{grid-column:1/3}
+  ul.pts{list-style:none;margin:0;padding:0}
+  ul.pts li{padding:8px 0 8px 26px;position:relative;font-size:14px;line-height:1.45;border-top:1px solid var(--line)}
+  ul.pts li:first-child{border-top:0}
+  ul.pts li::before{position:absolute;left:0;top:7px;font-size:14px}
+  .pos li::before{content:"✓";color:var(--good)}
+  .neg li::before{content:"!";color:var(--warn);font-weight:800}
+  .sug li::before{content:"→";color:var(--brand)}
+  .chat{display:flex;flex-direction:column;gap:10px}
+  .msg{max-width:78%;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.4}
+  .msg.cli{align-self:flex-start;background:var(--panel2);border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msg.age{align-self:flex-end;background:linear-gradient(135deg,var(--brand),var(--brand2));border-bottom-right-radius:4px;color:#fff}
+  .tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .tag{font-size:11.5px;padding:4px 10px;border-radius:20px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+  .note{margin-top:22px;color:var(--muted);font-size:12px;text-align:center}
+  @media(max-width:860px){.app{grid-template-columns:1fr}.side{height:auto}.grid{grid-template-columns:1fr}.card.span2{grid-column:1}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <div class="logo">QA</div>
+      <div><h1>Atendimento QA</h1><span>Análise de conversas por IA</span></div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><b id="k-avg">—</b><small>Nota média</small></div>
+      <div class="kpi"><b id="k-total">—</b><small>Conversas</small></div>
+      <div class="kpi"><b id="k-alert">—</b><small>Precisam de atenção</small></div>
+    </div>
+    <div class="listhead">Conversas analisadas</div>
+    <div class="list" id="list"></div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+
+<script>
+/* Dados fictícios — nenhuma conversa real, nenhum cliente. */
+const DATA = [
+  { id:1, agente:"Carla M.", canal:"WhatsApp", data:"Hoje, 09:12", score:92, sentimento:"Positivo",
+    positivos:["Saudação personalizada e cordial","Respondeu a dúvida de preço em menos de 1 min","Ofereceu próximo passo claro (agendamento)"],
+    negativos:["Não confirmou o nome do cliente no fechamento"],
+    sugestoes:["Fechar sempre reforçando o nome e o combinado","Registrar o interesse no CRM ao fim da conversa"],
+    chat:[["cli","Oi, vocês fazem entrega na zona sul?"],["age","Oi! Fazemos sim 😊 Entregamos em toda a zona sul, com frete grátis acima de R$150."],["cli","E quanto tempo demora?"],["age","De 2 a 4 dias úteis. Quer que eu já monte um pedido pra você?"]] },
+  { id:2, agente:"João P.", canal:"Instagram", data:"Hoje, 08:40", score:74, sentimento:"Neutro",
+    positivos:["Tom educado","Informação técnica correta"],
+    negativos:["Demorou 12 min para a primeira resposta","Não perguntou o objetivo do cliente","Encerrou sem chamar para ação"],
+    sugestoes:["Responder em até 3 min no horário comercial","Sempre terminar com uma pergunta ou CTA"],
+    chat:[["cli","Esse plano tem fidelidade?"],["age","Não, é mensal e pode cancelar quando quiser."],["cli","Ah ok"],["age","Qualquer coisa estou à disposição."]] },
+  { id:3, agente:"Bot IA", canal:"WhatsApp", data:"Hoje, 08:05", score:88, sentimento:"Positivo",
+    positivos:["Qualificou o lead antes de encaminhar","Coletou nome e cidade","Encaminhou ao humano no momento certo"],
+    negativos:["Repetiu a mesma pergunta uma vez"],
+    sugestoes:["Guardar contexto para não repetir perguntas já respondidas"],
+    chat:[["cli","Quero saber sobre o curso"],["age","Claro! Posso te ajudar. Qual seu nome e de qual cidade você fala?"],["cli","Marina, de Campinas"],["age","Prazer, Marina! Vou te conectar com um especialista agora 🙌"]] },
+  { id:4, agente:"João P.", canal:"WhatsApp", data:"Ontem, 17:22", score:58, sentimento:"Negativo",
+    positivos:["Tentou resolver o problema"],
+    negativos:["Respostas curtas e secas","Não demonstrou empatia com a reclamação","Deixou o cliente sem resposta final","Cliente encerrou insatisfeito"],
+    sugestoes:["Validar o sentimento do cliente antes de resolver ('entendo sua frustração')","Nunca deixar uma reclamação sem encerramento","Escalar para supervisor quando houver insatisfação"],
+    chat:[["cli","Meu pedido chegou errado, isso é um absurdo"],["age","Qual o número do pedido?"],["cli","#4821"],["age","Vou verificar."]] },
+  { id:5, agente:"Carla M.", canal:"Instagram", data:"Ontem, 15:03", score:81, sentimento:"Positivo",
+    positivos:["Boa apresentação do produto","Usou o nome do cliente","Ofereceu material complementar"],
+    negativos:["Não confirmou se a dúvida foi resolvida"],
+    sugestoes:["Fechar perguntando 'ficou alguma dúvida?' antes de encerrar"],
+    chat:[["cli","Vi o post de vocês, queria entender melhor"],["age","Que bom que gostou! Posso te explicar em 2 min. Você busca pra uso pessoal ou pro trabalho?"],["cli","Trabalho"],["age","Perfeito! Nesse caso o plano Pro se encaixa melhor — te mando um resumo?"]] },
+  { id:6, agente:"Bot IA", canal:"WhatsApp", data:"Ontem, 11:47", score:46, sentimento:"Negativo",
+    positivos:["Resposta imediata"],
+    negativos:["Não entendeu a intenção do cliente","Respondeu fora do contexto","Não encaminhou para humano quando travou","Cliente abandonou a conversa"],
+    sugestoes:["Adicionar fallback: após 2 respostas sem avanço, chamar um humano","Melhorar a classificação de intenção do agente"],
+    chat:[["cli","Quero cancelar"],["age","Ótimo! Temos várias opções de planos 😄"],["cli","Não, quero CANCELAR"],["age","Posso te ajudar a escolher o melhor plano!"]] },
+];
+
+const scoreClass = s => s>=80?"s-good":s>=65?"s-warn":"s-bad";
+const ringColor  = s => s>=80?"var(--good)":s>=65?"var(--warn)":"var(--bad)";
+const initials = n => n.replace("Bot IA","IA").split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase();
+
+const listEl = document.getElementById("list");
+const mainEl = document.getElementById("main");
+
+function renderList(sel){
+  listEl.innerHTML = "";
+  DATA.forEach(c=>{
+    const b = document.createElement("button");
+    b.className = "item"+(c.id===sel?" active":"");
+    b.innerHTML = `<span class="ava">${initials(c.agente)}</span>
+      <span class="who"><b>${c.agente}</b><small>${c.canal} · ${c.data}</small></span>
+      <span class="score ${scoreClass(c.score)}">${c.score}</span>`;
+    b.onclick = ()=>renderDetail(c.id);
+    listEl.appendChild(b);
+  });
+}
+function li(arr,cls){return `<ul class="pts ${cls}">${arr.map(x=>`<li>${x}</li>`).join("")||"<li style='color:var(--muted)'>—</li>"}</ul>`;}
+
+function renderDetail(id){
+  const c = DATA.find(x=>x.id===id);
+  renderList(id);
+  mainEl.innerHTML = `
+    <div class="top">
+      <div>
+        <h2>${c.agente} <span style="color:var(--muted);font-weight:500">· ${c.canal}</span></h2>
+        <div class="meta">${c.data} · sentimento: <b style="color:${ringColor(c.score)}">${c.sentimento}</b></div>
+      </div>
+      <div class="gauge">
+        <div class="ring" style="--v:${c.score};--rc:${ringColor(c.score)}"><i>${c.score}</i></div>
+        <div style="font-size:13px;color:var(--muted);max-width:150px">Nota de qualidade do atendimento (0–100), gerada pela IA</div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card"><h3>Pontos positivos</h3>${li(c.positivos,"pos")}</div>
+      <div class="card"><h3>Pontos de atenção</h3>${li(c.negativos,"neg")}</div>
+      <div class="card span2"><h3>Sugestões de melhoria</h3>${li(c.sugestoes,"sug")}</div>
+      <div class="card span2"><h3>Trecho da conversa</h3>
+        <div class="chat">${c.chat.map(m=>`<div class="msg ${m[0]==="cli"?"cli":"age"}">${m[1]}</div>`).join("")}</div>
+        <div class="tags"><span class="tag">Canal: ${c.canal}</span><span class="tag">Agente: ${c.agente}</span><span class="tag">Nota: ${c.score}/100</span></div>
+      </div>
+    </div>
+    <p class="note">Protótipo de demonstração · dados fictícios · análise ilustrativa</p>`;
+}
+
+const avg = Math.round(DATA.reduce((a,c)=>a+c.score,0)/DATA.length);
+document.getElementById("k-avg").textContent = avg;
+document.getElementById("k-total").textContent = DATA.length;
+document.getElementById("k-alert").textContent = DATA.filter(c=>c.score<65).length;
+renderDetail(1);
+</script>
+</body>
+</html>

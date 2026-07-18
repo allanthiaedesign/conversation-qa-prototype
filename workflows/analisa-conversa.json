@@ -1,0 +1,150 @@
+{
+  "name": "Analisa conversa (QA por IA)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "analisa-conversa",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d1000000-0000-4000-8000-000000000001",
+      "name": "Conversa recebida (Webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "webhookId": "d1000000-0000-4000-8000-0000000000wh",
+      "notes": "Recebe { agente, canal, transcricao } — a transcrição é o diálogo completo em texto."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Avalie a qualidade do atendimento abaixo.\n\nAgente: {{ $json.body.agente }}\nCanal: {{ $json.body.canal }}\n\nConversa:\n{{ $json.body.transcricao }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Você é um analista de qualidade (QA) de atendimento ao cliente. Avalie a conversa de forma objetiva e imparcial, considerando: cordialidade, tempo/atenção, clareza, empatia, resolução e chamada para ação. Dê uma nota de 0 a 100 e liste pontos concretos observados na conversa — nunca genéricos. Responda apenas com o JSON pedido, em português."
+        }
+      },
+      "id": "d1000000-0000-4000-8000-000000000002",
+      "name": "Analisa qualidade (LLM)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [520, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": { "temperature": 0.2 }
+      },
+      "id": "d1000000-0000-4000-8000-000000000003",
+      "name": "Modelo de IA",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [430, 520],
+      "notes": "Conecte aqui sua credencial da OpenAI."
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"required\": [\"score\", \"sentimento\", \"positivos\", \"negativos\", \"sugestoes\"],\n  \"properties\": {\n    \"score\": { \"type\": \"integer\", \"minimum\": 0, \"maximum\": 100 },\n    \"sentimento\": { \"type\": \"string\", \"enum\": [\"Positivo\", \"Neutro\", \"Negativo\"] },\n    \"positivos\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n    \"negativos\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n    \"sugestoes\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } }\n  }\n}",
+        "autoFix": true,
+        "options": {}
+      },
+      "id": "d1000000-0000-4000-8000-000000000004",
+      "name": "Formata resultado (JSON)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [720, 520]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {}
+      },
+      "id": "d1000000-0000-4000-8000-000000000005",
+      "name": "Modelo corretor (autoFix)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [900, 520],
+      "notes": "Reconcilia JSON malformado contra o schema."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "g1",
+              "leftValue": "={{ $json.output.score }}",
+              "rightValue": 65,
+              "operator": { "type": "number", "operation": "lt" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d1000000-0000-4000-8000-000000000006",
+      "name": "Nota baixa?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [820, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "a1", "name": "alerta", "type": "string", "value": "=⚠️ Atendimento de {{ $json.body?.agente || 'agente' }} teve nota {{ $json.output.score }}. Revisar: {{ $json.output.negativos.join('; ') }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d1000000-0000-4000-8000-000000000007",
+      "name": "Monta alerta ao supervisor",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1080, 200],
+      "notes": "Aqui, no uso real, envia a notificação (WhatsApp/Slack/e-mail) ao supervisor."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.output) }}",
+        "options": {}
+      },
+      "id": "d1000000-0000-4000-8000-000000000008",
+      "name": "Responde resultado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1080, 400]
+    }
+  ],
+  "connections": {
+    "Conversa recebida (Webhook)": {
+      "main": [[{ "node": "Analisa qualidade (LLM)", "type": "main", "index": 0 }]]
+    },
+    "Modelo de IA": {
+      "ai_languageModel": [[{ "node": "Analisa qualidade (LLM)", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Formata resultado (JSON)": {
+      "ai_outputParser": [[{ "node": "Analisa qualidade (LLM)", "type": "ai_outputParser", "index": 0 }]]
+    },
+    "Modelo corretor (autoFix)": {
+      "ai_languageModel": [[{ "node": "Formata resultado (JSON)", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Analisa qualidade (LLM)": {
+      "main": [[{ "node": "Nota baixa?", "type": "main", "index": 0 }]]
+    },
+    "Nota baixa?": {
+      "main": [
+        [{ "node": "Monta alerta ao supervisor", "type": "main", "index": 0 }],
+        [{ "node": "Responde resultado", "type": "main", "index": 0 }]
+      ]
+    },
+    "Monta alerta ao supervisor": {
+      "main": [[{ "node": "Responde resultado", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}
